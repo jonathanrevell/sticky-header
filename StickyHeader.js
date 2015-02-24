@@ -47,8 +47,8 @@
 
     setupSubscriptions: function() {
       var _stack = this;
-      nuskin.util.MobileUtils.subscribeToMobileStateChange( function( ev ) {
-        _stack.publishMobileStateChange( ev );
+      $(document).on("mobileStateChange", function( event, data ) {
+        _stack.publishMobileStateChange( data );
         _stack.updatePositions();
       });
     }

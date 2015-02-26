@@ -33,6 +33,17 @@
 
   		return totalOffset;
   	},
+  	
+    getStackHeight: function() {
+      var totalHeight = 0;
+      for(var idx = 0; idx < this.stack.length; idx++ ) {
+
+  			var header = this.stack[idx];
+        totalHeight += header.calculatedHeight;
+  		}
+
+      return totalHeight;
+    },
 
   	updatePositions: function() {
   		this.getOffset( false, true );
@@ -105,8 +116,15 @@
   		if(this.hidden || this.ignore) {
   			return 0;
   		}
-  		return Math.max(this.$header.height(), 0);
+  		return Math.max(this.$header.outerHeight(), 0);
   	},
+    get calculatedHeight() {
+      if( this.shouldCalculateHeight() ) {
+        return this.height;
+      } else {
+        return 0;
+      }
+    },
   	get top() {
   		return this.$header.css('top');
   	},

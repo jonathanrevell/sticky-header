@@ -1,0 +1,10 @@
+/* Sticky Headers  */
+/* Sticky Headers (General)*/
+.sticky-header {
+    position:fixed;
+    margin:0;
+}
+
+.sticky-header.hidden {
+    display:none;
+}

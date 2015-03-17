@@ -1,5 +1,6 @@
 (function(exports) {
   var mobileState = "none";
+  var MOBILE_WIDTH_BREAKPOINT = 767;
 
   // ---------------------------------------------
   //
@@ -7,6 +8,13 @@
   //
   // ---------------------------------------------
   var ScreenGeometry = {
+    getScreenHeight: function(){
+      return $(window).height();
+    },
+    getScreenWidth: function(){
+      return $(window).width();
+    },
+
     elementPositionInWindow: function( element ) {
       var $element = $(element),
           offset   = $element.offset();
@@ -81,7 +89,7 @@
     },
 
     isMobileLike: function() {
-      var mobileSized = ( publicMethods.getScreenWidth() <= MOBILE_WIDTH_BREAKPOINT );
+      var mobileSized = ( this.getScreenWidth() <= MOBILE_WIDTH_BREAKPOINT );
       return mobileSized;
     },
 
@@ -100,7 +108,7 @@
   //
   // ---------------------------------------------
   function getCurrentState() {
-    var mobileLike = publicMethods.isMobileLike(),
+    var mobileLike = ScreenGeometry.isMobileLike(),
       _newState = mobileLike ? "mobile" : "desktop";
 
     return _newState;
@@ -121,8 +129,8 @@
     var ev = {
         state:          newState,
         oldState:       oldState,
-        screenWidth:    publicMethods.getScreenWidth(),
-        screenHeight:   publicMethods.getScreenHeight()
+        screenWidth:    ScreenGeometry.getScreenWidth(),
+        screenHeight:   ScreenGeometry.getScreenHeight()
     };
     $(document).trigger("mobileStateChange", [ev]);
   };

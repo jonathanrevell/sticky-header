@@ -15,11 +15,12 @@
 
     this.scrollWatch = options.scrollWatch || window;
     this.watchScroll();
+    this.watchResize();
   }
   StickyHeaderStack.prototype = {
 
     push: function(header) {
-      // header.mobileState = util.MobileUtils.getState();
+      header.mobileState = ScreenGeometry.getState();
       header.mobileState = "desktop";
 
       this.stack.push(header);
@@ -60,6 +61,18 @@
       }
       this.bottom = insertionPoint;
       return insertionPoint;
+    },
+
+    getPreviousActiveInCategory: function( category ) {
+      for(var idx = 0; idx < this.activeStack.length; idx++ ) {
+        var header = this.activeStack[idx];
+
+        if(header.category == category) {
+          return header;
+        }
+      }
+
+      return null;
     },
 
     pushIntoActiveStack: function(header) {
@@ -176,6 +189,15 @@
         _stack.updatePositions();
       }, SCROLL_BUFFER));
     },
+    watchResize: function() {
+      var _stack = this;
+      $( window ).resize( _.throttle(function() {
+        for (var idx = 0; idx < _stack.stack.length; idx++) {
+          var header = _stack.stack[idx];
+          header.updatePosition();
+        }
+      }, SCROLL_BUFFER));
+    }
 
   };
 
@@ -195,7 +217,8 @@
     this._active = false;
     this.activeStackIndex = -1;
 
-    this.hidden = false;
+    this.hidden     = false;
+    this.category   = options.category || null;
 
     this.stack = StickyHeaderStack;
     this.placeholder = options.placeholder || "clone";
@@ -220,18 +243,21 @@
       StickyHeaderStack.updatePositions();
     },
     createStickyClone: function() {
-      var placeholderPosition = this.getPlaceholderPositionInWindow();
-
       this.$stickyHeader = this.$header.clone();
       this.$stickyHeader
         .attr('id', this.$header.attr('id') + "-sticky")
         .addClass('sticky-header')
-        .appendTo('body')
-        .css('left', placeholderPosition.left);
+        .appendTo('body');
+
+      this.updatePosition();
 
     },
     getPlaceholderPositionInWindow: function() {
       return ScreenGeometry.elementPositionInWindow(this.$header);
+    },
+    updatePosition: function() {
+      var placeholderPosition = this.getPlaceholderPositionInWindow();
+      this.$stickyHeader.css('left', placeholderPosition.left);
     },
 
     ///////////////////////////////////////

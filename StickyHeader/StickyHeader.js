@@ -4,24 +4,34 @@
 
   // Manages the stacking of headers on the page
 
-  var StickyHeaderStack = function(options) {
+  var StickyHeaderStack = function StickyHeaderStack(options) {
     options || (options = {});
 
-    this.stack = [];
-    this.activeStack = [];
-    this.positionListeners = [];
-    this.$stackOffset = null;
-    this.bottom = 0;
+    this.$stackProxy         = null;
+
+    this.stack               = [];
+    this.activeStack         = [];
+    this.mobileState         = "none";
+    this.positionListeners   = [];
+    this._stackOffset        = options.stackOffset || null;
+    this._stackOffsetMobile  = options.stackOffsetMobile || null;
+    this.bottom              = 0;
 
     this.scrollWatch = options.scrollWatch || window;
-    this.watchScroll();
-    this.watchResize();
   }
   StickyHeaderStack.prototype = {
 
+    initialize: function( options ) {
+      this.$stackProxy = $('<div style="width:100%;position:fixed;top:0;left:0;"></div>');
+      this.$stackProxy
+        .addClass('sticky-stack')
+        .appendTo('body');
+
+      this.setupSubscriptions();
+    },
+
     push: function(header) {
-      header.mobileState = ScreenGeometry.getState();
-      header.mobileState = "desktop";
+      header.mobileState = this.mobileState;
 
       this.stack.push(header);
       return this.stack.length - 1;
@@ -36,10 +46,10 @@
     },
 
     // Gets the offset for positioning the element
-    getOffset: function(forIndex, updatePositions) {
+    calculateHeaderOffsets: function(forIndex, updatePositions) {
       forIndex = forIndex ? forIndex : this.stack.length - 1;
 
-      var insertionPoint = 0;
+      var insertionPoint = this.top;
       for (var idx = 0; idx <= forIndex; idx++) {
 
         var header = this.stack[idx];
@@ -98,9 +108,9 @@
 
     getStackHeight: function() {
       var totalHeight = 0;
-      for (var idx = 0; idx < this.stack.length; idx++) {
+      for (var idx = 0; idx < this.activeStack.length; idx++) {
 
-        var header = this.stack[idx];
+        var header = this.activeStack[idx];
         totalHeight += header.currentHeight;
       }
 
@@ -108,10 +118,19 @@
     },
 
     updatePositions: function() {
-      this.getOffset(false, true);
+      this.calculateHeaderOffsets(false, true);
+      this.height = this.getStackHeight();
+
+      var ev = {
+        bottom: this.bottom,
+        height: this.height
+      }
+      this.$stackProxy.trigger('PositionsUpdated', [ev]);
     },
 
     publishMobileStateChange: function(ev) {
+      this.mobileState = ev.state;
+
       for (var idx = 0; idx < this.stack.length; idx++) {
         var header = this.stack[idx];
         header.mobileState = ev.state;
@@ -120,31 +139,18 @@
 
     setupSubscriptions: function() {
       var _stack = this;
+
+      this.watchScroll();
+      this.watchResize();
+
+      this.mobileState = ScreenGeometry.getState();
+
       $(document).on("mobileStateChange", function(event, data) {
         _stack.publishMobileStateChange(data);
         _stack.updatePositions();
       });
     },
 
-    setHeaderSpaceOffsetElement: function(el) {
-      this.$stackOffset = $(el);
-      this.$stackOffset.css("display", "block");
-      this.$stackOffset.width("100%");
-    },
-
-    setHeaderReservedSpace: function() {
-
-      if (this.$stackOffset) {
-        var offset = 0;
-
-        for (var idx = 0; idx < this.stack.length; idx++) {
-          var _header = this.stack[idx];
-          offset += _header.reservedSpaceHeight;
-        }
-
-        this.$stackOffset.height(offset);
-      }
-    },
     addPositionListener: function(header, position, ev, options) {
       options || (options = {});
       this.positionListeners.push({
@@ -197,6 +203,53 @@
           header.updatePosition();
         }
       }, SCROLL_BUFFER));
+    },
+
+    ///////////////////////////////////////
+    //  GETTERS & SETTERS
+
+    get top() {
+      return (this.mobileState != "mobile") ? this.stackOffset : this.stackOffsetMobile;
+    },
+
+    get stackOffset() {
+      if(!this._stackOffset) {
+        return 0;
+      }
+      if(typeof this._stackOffset === 'number') {
+        return this._stackOffset;
+
+      } else if(typeof this._stackOffset === 'string' || this._stackOffset instanceof $) {
+        return $(this._stackOffset).outerHeight();
+
+      }
+    },
+
+    set height( val ) {
+      this.$stackProxy.height(val);
+    },
+
+    set stackOffset( val ) {
+      this._stackOffset = val;
+      this.updatePositions();
+    },
+
+    get stackOffsetMobile() {
+      if(!this._stackOffsetMobile) {
+        return this.stackOffset;  //Fallback to the stack offset if no mobile option is defined
+      }
+      if(typeof this._stackOffsetMobile === 'number') {
+        return this._stackOffsetMobile;
+
+      } else if(typeof this._stackOffsetMobile === 'string' || this._stackOffsetMobile instanceof $) {
+        return $(this._stackOffsetMobile).outerHeight();
+
+      }
+    },
+
+    set stackOffsetMobile( val ) {
+      this._stackOffsetMobile = val;
+      this.updatePositions();
     }
 
   };
@@ -209,7 +262,7 @@
   // options: {
   //     scrollWatch: selector or element to watch,
   //     hideAbove: hides the header above the given y index
-  var StickyHeader = function(selector, options) {
+  var StickyHeader = function StickyHeader(selector, options) {
     options = options ? options : {};
 
     this.$header = $(selector);
@@ -217,12 +270,15 @@
     this._active = false;
     this.activeStackIndex = -1;
 
-    this.hidden     = false;
-    this.category   = options.category || null;
+    this.cachedDOM = {};
 
-    this.stack = StickyHeaderStack;
-    this.placeholder = options.placeholder || "clone";
-    this.mobileState = 'none';
+    this.hidden                 = false;
+    this.category               = options.category || null;
+    this.customLeftAlignment    = options.customLeftAlignment || false;
+
+    this.stack        = StickyHeaderStack;
+    this.placeholder  = options.placeholder || "clone";
+    this.mobileState  = 'none';
 
     this.containment = options.containment || {};
 
@@ -233,21 +289,21 @@
     // Initialization
     this.initialize(options);
   };
-
-
   StickyHeader.prototype = {
     initialize: function(options) {
-      this.createStickyClone();
+      this.setupDOM();
 
       StickyHeaderStack.push(this);
       StickyHeaderStack.updatePositions();
+
+      this.syncToBaseHeader();
     },
-    createStickyClone: function() {
+    setupDOM: function() {
       this.$stickyHeader = this.$header.clone();
       this.$stickyHeader
         .attr('id', this.$header.attr('id') + "-sticky")
         .addClass('sticky-header')
-        .appendTo('body');
+        .appendTo(this.stack.$stackProxy);
 
       this.updatePosition();
 
@@ -256,9 +312,48 @@
       return ScreenGeometry.elementPositionInWindow(this.$header);
     },
     updatePosition: function() {
-      var placeholderPosition = this.getPlaceholderPositionInWindow();
-      this.$stickyHeader.css('left', placeholderPosition.left);
+      if(!this.customLeftAlignment) {
+        var placeholderPosition = this.getPlaceholderPositionInWindow();
+        this.$stickyHeader.css('left', placeholderPosition.left);
+      }
     },
+    syncToBaseHeader: function() {
+      var _header = this;
+
+      setInterval( function() {
+        var stickyDisplay = _header.$stickyHeader.css('display'),
+            baseDisplay   = _header.$header.css('display'),
+            classes = _header.$header.attr('class'),
+            html = _header.$header.html();
+
+        classes = classes ? classes + ' sticky-header' : 'sticky-header';
+        classes = _header.$stickyHeader.hasClass('active') ? classes + ' active' : classes;
+
+
+        if(stickyDisplay != baseDisplay) {
+          if(_header.$header.css('display') == 'none' && _header.$stickyHeader.css('display') != 'none' ) {
+            _header.$stickyHeader.css('display', 'none');
+          } else if(_header.$stickyHeader.css('display') != 'block' ) {
+            _header.$stickyHeader.css('display', 'block');
+          }
+        }
+
+        // Match up the sticky header with the source
+        // We cut down on DOM writes by caching the values
+        // and only updating the DOM when changes have occurred
+        if(!_header.cachedDOM.class || _header.cachedDOM.class != classes ) {
+          _header.$stickyHeader.attr('class', classes);
+          _header.cachedDOM.class = classes;
+        }
+        if(!_header.cachedDOM.html || _header.cachedDOM.html != html ) {
+          _header.$stickyHeader.html(html);
+          _header.cachedDOM.html = html;
+        }
+
+
+      }, 1000);
+    },
+
 
     ///////////////////////////////////////
     //  GETTERS & SETTERS
@@ -284,10 +379,14 @@
     },
 
     set top(newValue) {
+      // Filter the values
       if (newValue < 0) {
         newValue = 0;
       }
+
+      // Set the position
       this.$stickyHeader.css('top', newValue);
+
     },
 
     get active() {
@@ -297,7 +396,7 @@
         bottom;
 
       if(idx == 0) {
-        bottom = 0;
+        bottom = this.stack.top;
 
       } else if(idx > 0) {
         bottom = this.stack.getActiveHeaderWithIndex(idx - 1).bottom;
@@ -320,15 +419,145 @@
     },
   }
 
+  // A sticky pushable won't be part of a stacking context, but it will be pushed by
+  // the sticky header stack
+
+  var StickyPushable = function StickyPushable( selector, options ) {
+    options || (options = {});
+
+    this.$el  = $(selector);
+    this.$container = $(options.container || this.$el.parent());
+    this.pusher = options.pusher || window;
+
+    this._mobileState = "none";
+    this.activeOnMobile   = options.activeOnMobile || true;
+    this.activeOnDesktop  = options.activeOnDesktop || true;
+
+    this.initialize( options );
+
+    return this;
+  }
+  StickyPushable.prototype = {
+    initialize: function( options ) {
+      this.$el.css('position', 'relative');
+      this.$el.css('transition', 'all 0.1s');
+      this.subscribeToStackUpdates();
+      this.subscribeToMobileStateChange();
+
+      this.watchResize();
+      this.refresh();
+
+    },
+
+    refresh: function() {
+      this.screenTop = this.getPusherBottom();
+    },
+
+    subscribeToStackUpdates: function() {
+      var _this = this;
+      if(this.pusher instanceof StickyHeaderStack.constructor) {
+        this.pusher.$stackProxy.on('PositionsUpdated', _.throttle( function( ev, data ) {
+          _this.onPusherUpdate( _this.getPusherBottom() );
+        }, 60));
+
+      } else {
+        $(this.pusher).scroll(_.throttle( function( ev ) {
+          _this.onPusherUpdate( _this.getPusherBottom() );
+        }, SCROLL_BUFFER ));
+      }
+
+    },
+
+    getPusherBottom: function() {
+      if(this.pusher instanceof StickyHeaderStack.constructor) {
+        return $(window).scrollTop() + this.pusher.bottom;
+      } else {
+        return $(window).scrollTop();
+      }
+    },
+
+    watchResize: function() {
+      var _pusher = this;
+      $( window ).resize( _.throttle(function() {
+        _pusher.refresh();
+      }, SCROLL_BUFFER));
+    },
+
+    subscribeToMobileStateChange: function() {
+      var _pushable = this;
+      $(document).on("mobileStateChange", function(event, data) {
+        _pushable.mobileState = data.state;
+      });
+    },
+
+    onPusherUpdate: function( bottom ) {
+      this.screenTop = bottom;
+    },
+
+    getContainerBottom: function() {
+      return (this.$container.offset().top + this.$container.height());
+    },
+
+
+    ///////////////////////////////////////
+    //  GETTERS & SETTERS
+    set top( val ) {
+      if(val < 0) {
+        val = 0;
+      }
+      if((this.mobileState == "mobile" && this.activeOnMobile) || (this.mobileState != "mobile" && this.activeOnDesktop )) {
+        this.$el.css('top', val);
+      } else {
+        this.$el.css('top', 0);
+      }
+    },
+
+    set mobileState( val ) {
+      this._mobileState = val;
+      this.refresh();
+    },
+
+    get mobileState() {
+      return this._mobileState;
+    },
+
+    get height() {
+      return this.$el.outerHeight();
+    },
+
+    get originalTop() {
+      var cssTop = this.$el.css('top');
+      if( (typeof cssTop === 'undefined') || (typeof cssTop == 'string' && cssTop == 'auto')) {
+        cssTop = 0;
+      }
+      else if(typeof cssTop == 'string' && cssTop.indexOf('px') != -1) {
+        cssTop = parseFloat( cssTop );
+      }
+
+      return this.$el.offset().top - cssTop;
+    },
+
+    set screenTop( screenPosition ) {
+      var containerBottom = this.getContainerBottom(),
+          relativePosition;
+
+      if(screenPosition + this.height > containerBottom) {
+        screenPosition = containerBottom - this.height;
+      }
+      relativePosition = screenPosition - this.originalTop;
+
+      this.top = relativePosition;
+    }
+  }
+
+
   StickyHeaderStack = new StickyHeaderStack();
 
   $(document).ready(function() {
-    StickyHeaderStack.setupSubscriptions();
-
-    $('body').prepend('<div class="stickyHeaderOffset"></div>');
-    StickyHeaderStack.setHeaderSpaceOffsetElement('.stickyHeaderOffset');
+    StickyHeaderStack.initialize();
   });
 
-  exports.StickyHeaderStack = StickyHeaderStack;
-  exports.StickyHeader = StickyHeader;
+  exports.StickyHeaderStack   = StickyHeaderStack;
+  exports.StickyHeader        = StickyHeader;
+  exports.StickyPushable      = StickyPushable;
 })(window);

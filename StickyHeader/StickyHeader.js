@@ -409,10 +409,12 @@
         this._active = true;
         this.$stickyHeader.addClass('active');
         this.$stickyHeader.css('visibility', 'visible');
+        this.$header.css('visibility', 'hidden');
       } else {
         this._active = false;
         this.$stickyHeader.removeClass('active');
         this.$stickyHeader.css('visibility', 'hidden');
+        this.$header.css('visibility', 'visible');
       }
 
       return this._active;

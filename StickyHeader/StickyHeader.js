@@ -13,8 +13,9 @@
     this.activeStack         = [];
     this.mobileState         = "none";
     this.positionListeners   = [];
-    this._stackOffset        = options.stackOffset || null;
-    this._stackOffsetMobile  = options.stackOffsetMobile || null;
+    this._stackOffset        = options.stackOffset        || null;
+    this._stackOffsetMobile  = options.stackOffsetMobile  || null;
+    this._containment        = options.containment        || {};
     this.bottom              = 0;
 
     this.scrollWatch = options.scrollWatch || window;
@@ -58,9 +59,9 @@
           if (header.active) {
             this.pushIntoActiveStack(header);
 
-            if (header.containment.top && insertionPoint < header.containment.top) {
-              insertionPoint = header.containment.top;
-            }
+            insertionPoint = this._constrainInsertionPointToHeaderTop( insertionPoint, header );
+            insertionPoint = this._constrainInsertionPointToStackBoundary( insertionPoint );
+
             header.top = insertionPoint;
 
           } else {
@@ -70,6 +71,20 @@
         insertionPoint += header.currentHeight;
       }
       this.bottom = insertionPoint;
+      return insertionPoint;
+    },
+
+    _constrainInsertionPointToHeaderTop: function( insertionPoint, header ) {
+      if (header.containment.top && insertionPoint < header.containment.top) {
+        insertionPoint = header.containment.top;
+      }
+      return insertionPoint;
+    },
+
+    _constrainInsertionPointToStackBoundary: function( insertionPoint ) {
+      if (this.containment.top && insertionPoint < this.containment.top) {
+        insertionPoint = this.containment.top;
+      }
       return insertionPoint;
     },
 
@@ -209,7 +224,15 @@
     //  GETTERS & SETTERS
 
     get top() {
-      return (this.mobileState != "mobile") ? this.stackOffset : this.stackOffsetMobile;
+      if(this.mobileState != "mobile") {
+        return _.isFunction(this.stackOffset) ? this.stackOffset() : this.stackOffset;
+      } else {
+        return _.isFunction(this.stackOffsetMobile) ? this.stackOffsetMobile : this.stackOffsetMobile;
+      }
+    },
+
+    set height( val ) {
+      this.$stackProxy.height(val);
     },
 
     get stackOffset() {
@@ -223,10 +246,6 @@
         return $(this._stackOffset).outerHeight();
 
       }
-    },
-
-    set height( val ) {
-      this.$stackProxy.height(val);
     },
 
     set stackOffset( val ) {
@@ -250,9 +269,39 @@
     set stackOffsetMobile( val ) {
       this._stackOffsetMobile = val;
       this.updatePositions();
+    },
+
+
+    set containment( val ) {
+      this._containment = val;
+      this.updatePositions();
+    },
+
+    get containment() {
+      return this._containment;
     }
 
   };
+
+  var StickyHeaderBoundary = function StickyHeaderBoundary(selector, options) {
+    options || (options = {});
+
+    this.$boundary = $(selector);
+  }
+  StickyHeaderBoundary.prototype = {
+    get top() {
+      return ScreenGeometry.elementPositionInWindow(this.$boundary).top;
+    },
+
+    get height() {
+      return this.$boundary.outerHeight();
+    },
+
+    // bottom position *in window*
+    get bottom() {
+      return this.top + this.height;
+    }
+  }
 
 
 
@@ -267,7 +316,9 @@
 
     this.$header = $(selector);
     this.$stickyHeader = null;
-    this._active = false;
+    this.alwaysActive  = options.alwaysActive || false;
+    this._active       = this.alwaysActive;
+
     this.activeStackIndex = -1;
 
     this.cachedDOM = {};
@@ -285,6 +336,7 @@
     this.hideOnDesktop = options.hideOnDesktop || false;
     this.hideOnMobile = options.hideOnMobile || false;
 
+    this.sleeping = false;
 
     // Initialization
     this.initialize(options);
@@ -318,7 +370,8 @@
       }
     },
     syncToBaseHeader: function() {
-      var _header = this;
+      var _header         = this,
+          _changedState   = false;
 
       setInterval( function() {
         var stickyDisplay = _header.$stickyHeader.css('display'),
@@ -333,8 +386,11 @@
         if(stickyDisplay != baseDisplay) {
           if(_header.$header.css('display') == 'none' && _header.$stickyHeader.css('display') != 'none' ) {
             _header.$stickyHeader.css('display', 'none');
+            _changedState = true;
+
           } else if(_header.$stickyHeader.css('display') != 'block' ) {
             _header.$stickyHeader.css('display', 'block');
+            _changedState = true;
           }
         }
 
@@ -344,14 +400,26 @@
         if(!_header.cachedDOM.class || _header.cachedDOM.class != classes ) {
           _header.$stickyHeader.attr('class', classes);
           _header.cachedDOM.class = classes;
+          _changedState = true;
         }
         if(!_header.cachedDOM.html || _header.cachedDOM.html != html ) {
           _header.$stickyHeader.html(html);
           _header.cachedDOM.html = html;
+          _changedState = true;
         }
 
+        // Trigger the parent to recalculate positions, since
+        // geometry-related changed may have occurred
+        if(_changedState) {
+          _header.stack.updatePositions();
+          _changedState = false;
+        }
 
       }, 1000);
+    },
+
+    shouldWake: function() {
+      return this.isPartOfElementInWindow( this.$header );
     },
 
 
@@ -390,22 +458,24 @@
     },
 
     get active() {
-      var placeholderPosition = this.getPlaceholderPositionInWindow(),
-        idx                   = this.activeStackIndex,
-        stackLength           = this.stack.activeStack.length,
-        bottom;
+      if(!this.alwaysActive) {
+        var placeholderPosition = this.getPlaceholderPositionInWindow(),
+          idx                   = this.activeStackIndex,
+          stackLength           = this.stack.activeStack.length,
+          bottom;
 
-      if(idx == 0) {
-        bottom = this.stack.top;
+        if(idx == 0) {
+          bottom = this.stack.top;
 
-      } else if(idx > 0) {
-        bottom = this.stack.getActiveHeaderWithIndex(idx - 1).bottom;
+        } else if(idx > 0) {
+          bottom = this.stack.getActiveHeaderWithIndex(idx - 1).bottom;
 
-      } else {
-        bottom = this.stack.bottom;
+        } else {
+          bottom = this.stack.bottom;
+        }
       }
 
-      if (placeholderPosition.top <= bottom) {
+      if (this.alwaysActive || placeholderPosition.top <= bottom) {
         this._active = true;
         this.$stickyHeader.addClass('active');
         this.$stickyHeader.css('visibility', 'visible');
@@ -559,7 +629,8 @@
     StickyHeaderStack.initialize();
   });
 
-  exports.StickyHeaderStack   = StickyHeaderStack;
-  exports.StickyHeader        = StickyHeader;
-  exports.StickyPushable      = StickyPushable;
+  exports.StickyHeaderStack     = StickyHeaderStack;
+  exports.StickyHeader          = StickyHeader;
+  exports.StickyPushable        = StickyPushable;
+  exports.StickyHeaderBoundary  = StickyHeaderBoundary;
 })(window);

@@ -42,9 +42,21 @@
     <script>
     // This script is for demonstration purposes specific to this example page
     $(document).ready(function(){
+      headerBlocker = new StickyHeaderBoundary('#pageHeader')
+
+      alwaysHeader  = new StickyHeader('#alwaysHeader', {
+        alwaysActive: true
+      });
+
       firstHeader   = new StickyHeader('#firstHeader');
       secondHeader  = new StickyHeader('#secondHeader');
       thirdHeader   = new StickyHeader('#thirdHeader');
+
+      StickyHeaderStack.containment = {
+        get top() {
+          return headerBlocker.bottom;
+        }
+      }
 
       inlinePushable  = new StickyPushable('#inlineObject', {
         pusher: StickyHeaderStack,
@@ -55,7 +67,7 @@
   </head>
   <body>
     <div class="container">
-      <header>
+      <header id="pageHeader">
         <h1>StickyHeaders.js</h1>
       </header>
       <h2 id="firstHeader">This header follows you</h2>
@@ -65,6 +77,9 @@
       <p>
         Craft beer gentrify mollit wayfarers selfies, laboris Pitchfork food truck Vice est trust fund ut distillery. Irony fingerstache fashion axe cronut cupidatat iPhone swag, crucifix gluten-free. Carles irony deserunt, Banksy veniam occupy single-origin coffee kale chips magna street art migas salvia sustainable. Banjo normcore assumenda, aliquip seitan shabby chic bitters tousled. Skateboard pour-over letterpress, distillery kitsch crucifix stumptown squid flannel Wes Anderson fixie cupidatat consectetur. Pariatur shabby chic ad incididunt food truck. Deserunt fanny pack vegan, messenger bag qui selfies craft beer try-hard scenester irony et flexitarian food truck stumptown.
       </p>
+      <header id="alwaysHeader">
+          <h1>Always Visible</h1>
+      </header>
       <p>
         Cronut High Life enim, pug chillwave sapiente health goth aliqua. Wayfarers skateboard typewriter odio sint deep v. Fanny pack velit freegan esse. Put a bird on it consequat disrupt typewriter scenester, brunch vinyl actually mumblecore readymade freegan. Jean shorts Williamsburg meggings pug chia. Veniam before they sold out bitters hashtag, lumbersexual jean shorts voluptate disrupt seitan semiotics biodiesel freegan. Leggings pork belly culpa do.
       </p>

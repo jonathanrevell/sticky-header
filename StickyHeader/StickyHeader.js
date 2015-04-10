@@ -19,7 +19,7 @@
     this.bottom              = 0;
 
     this.scrollWatch = options.scrollWatch || window;
-  }
+  };
   StickyHeaderStack.prototype = {
 
     initialize: function( options ) {
@@ -139,7 +139,7 @@
       var ev = {
         bottom: this.bottom,
         height: this.height
-      }
+      };
       this.$stackProxy.trigger('PositionsUpdated', [ev]);
     },
 
@@ -287,7 +287,7 @@
     options || (options = {});
 
     this.$boundary = $(selector);
-  }
+  };
   StickyHeaderBoundary.prototype = {
     get top() {
       return ScreenGeometry.elementPositionInWindow(this.$boundary).top;
@@ -301,7 +301,7 @@
     get bottom() {
       return this.top + this.height;
     }
-  }
+  };
 
 
 
@@ -464,7 +464,7 @@
           stackLength           = this.stack.activeStack.length,
           bottom;
 
-        if(idx == 0) {
+      if(idx == 0) {
           bottom = this.stack.top;
 
         } else if(idx > 0) {
@@ -489,7 +489,7 @@
 
       return this._active;
     },
-  }
+  };
 
   // A sticky pushable won't be part of a stacking context, but it will be pushed by
   // the sticky header stack
@@ -508,7 +508,7 @@
     this.initialize( options );
 
     return this;
-  }
+  };
   StickyPushable.prototype = {
     initialize: function( options ) {
       this.$el.css('position', 'relative');
@@ -620,7 +620,7 @@
 
       this.top = relativePosition;
     }
-  }
+  };
 
 
   StickyHeaderStack = new StickyHeaderStack();

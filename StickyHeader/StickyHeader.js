@@ -338,6 +338,15 @@
 
     this.sleeping = false;
 
+    this.sleepCheckInterval           = null;
+    this.syncToBaseHeaderInterval     = null;
+
+    // Cached copies of DOM information
+    this._top     = null;
+    this._bottom  = null;
+    this._width   = null;
+    this._height  = null;
+
     // Initialization
     this.initialize(options);
   };
@@ -349,6 +358,7 @@
       StickyHeaderStack.updatePositions();
 
       this.syncToBaseHeader();
+      this.createSleepCheckInterval();
     },
     setupDOM: function() {
       this.$stickyHeader = this.$header.clone();
@@ -369,11 +379,21 @@
         this.$stickyHeader.css('left', placeholderPosition.left);
       }
     },
+
+    stopSyncToBaseHeader: function() {
+      if( this.syncToBaseHeaderInterval ) {
+        clearInterval( this.syncToBaseHeaderInterval );
+      }
+      this.syncToBaseHeaderInterval = null;
+    },
+
     syncToBaseHeader: function() {
       var _header         = this,
           _changedState   = false;
 
-      setInterval( function() {
+      this.stopSyncToBaseHeader();
+
+      this.syncToBaseHeaderInterval = setInterval( function() {
         var stickyDisplay = _header.$stickyHeader.css('display'),
             baseDisplay   = _header.$header.css('display'),
             classes = _header.$header.attr('class'),
@@ -418,8 +438,40 @@
       }, 1000);
     },
 
-    shouldWake: function() {
-      return this.isPartOfElementInWindow( this.$header );
+    createSleepCheckInterval: function() {
+      var _this = this;
+
+      if( this.sleepCheckInterval ) {
+        clearInterval( this.sleepCheckInterval );
+        this.sleepCheckInterval = null;
+      }
+
+      this.sleepCheckInterval = setInterval( function() {
+        var shouldSleep = _this.shouldSleep();
+        if(shouldSleep && !_this.sleeping) {
+          _this.sleep();
+
+        } else if(!shouldSleep && _this.sleeping ) {
+          _this.wake();
+        }
+      }, 50);
+    },
+
+    shouldSleep: function() {
+      return !ScreenGeometry.isPartOfElementInWindow( this.$header );
+    },
+
+    sleep: function() {
+      this.stopSyncToBaseHeader();
+      this.sleeping = true;
+
+      // Reset the cached properties just to be safe
+      this._top = null;
+    },
+
+    wake: function() {
+      this.syncToBaseHeader();
+      this.sleeping = false;
     },
 
 
@@ -439,11 +491,16 @@
     },
 
     get top() {
-      var top = this.$stickyHeader.css('top');
-      if(typeof top === "string") {
-        top = parseInt(top.replace('px'));
+      if(this._top !== null) {
+        return this._top;
+      } else {
+        var top = this.$stickyHeader.css('top');
+        if(typeof top === "string") {
+          top = parseInt(top.replace('px'));
+        }
+        return (top == 'auto') ? 0 : top;
       }
-      return (top == 'auto') ? 0 : top;
+
     },
 
     set top(newValue) {
@@ -452,12 +509,18 @@
         newValue = 0;
       }
 
-      // Set the position
-      this.$stickyHeader.css('top', newValue);
-
+      // Set the position IF its a new position
+      if(this._top !== newValue) {
+        this._top = newValue;
+        this.$stickyHeader.css('top', newValue);
+      }
     },
 
     get active() {
+      if(this.sleeping) {
+        return this._active;
+
+      }
       if(!this.alwaysActive) {
         var placeholderPosition = this.getPlaceholderPositionInWindow(),
           idx                   = this.activeStackIndex,
@@ -530,7 +593,7 @@
       if(this.pusher instanceof StickyHeaderStack.constructor) {
         this.pusher.$stackProxy.on('PositionsUpdated', _.throttle( function( ev, data ) {
           _this.onPusherUpdate( _this.getPusherBottom() );
-        }, 60));
+        }, 5));
 
       } else {
         $(this.pusher).scroll(_.throttle( function( ev ) {

@@ -494,7 +494,9 @@
       if(this._top !== null) {
         return this._top;
       } else {
-        var top = this.$stickyHeader.css('top');
+        var matrix = parseInt(this.$stickyHeader.css('transform').split(',')),
+            top    = matrix[5];
+
         if(typeof top === "string") {
           top = parseInt(top.replace('px'));
         }
@@ -512,7 +514,7 @@
       // Set the position IF its a new position
       if(this._top !== newValue) {
         this._top = newValue;
-        this.$stickyHeader.css('top', newValue);
+        this.$stickyHeader.css('transform', 'translateY(' + this._top + 'px)');
       }
     },
 
@@ -637,14 +639,23 @@
     ///////////////////////////////////////
     //  GETTERS & SETTERS
     set top( val ) {
-      if(val < 0) {
-        val = 0;
-      }
-      if((this.mobileState == "mobile" && this.activeOnMobile) || (this.mobileState != "mobile" && this.activeOnDesktop )) {
-        this.$el.css('top', val);
+      if(this._top && this._top == val) {
+        return;
       } else {
-        this.$el.css('top', 0);
+        if(val < 0) {
+          val = 0;
+        }
+        val = Math.round(val);
+        if((this.mobileState == "mobile" && this.activeOnMobile) || (this.mobileState != "mobile" && this.activeOnDesktop )) {
+          this.$el.css('transform', 'translateY(' + val + 'px)');
+
+        } else {
+          this.$el.css('transform', 'translateY(0)');
+        }
+
+        this._top = val;
       }
+
     },
 
     set mobileState( val ) {
@@ -661,15 +672,18 @@
     },
 
     get originalTop() {
-      var cssTop = this.$el.css('top');
-      if( (typeof cssTop === 'undefined') || (typeof cssTop == 'string' && cssTop == 'auto')) {
-        cssTop = 0;
-      }
-      else if(typeof cssTop == 'string' && cssTop.indexOf('px') != -1) {
-        cssTop = parseFloat( cssTop );
-      }
+      if(this._originalTop) {
+        return this._originalTop;
+      } else {
+        var matrix = parseInt(this.$el.css('transform').split(',')),
+            cssTop    = matrix[5];
 
-      return this.$el.offset().top - cssTop;
+        if( (typeof cssTop === 'undefined') || (typeof cssTop == 'string' && cssTop == 'none')) {
+          cssTop = 0;
+        }
+        this._originalTop = this.$el.offset().top - cssTop;
+        return this._originalTop;
+      }
     },
 
     set screenTop( screenPosition ) {

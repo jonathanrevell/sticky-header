@@ -36,7 +36,7 @@
     },
 
     isPartOfElementInWindow: function( element ) {
-      var origin = this.elementPositionInWindow( element );
+      var origin = this.elementPositionInWindow( element ),
           pt_bl  = {
             left: origin.left,
             top: origin.top + $(element).outerHeight()

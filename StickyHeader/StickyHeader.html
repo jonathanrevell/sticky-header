@@ -49,7 +49,9 @@
       });
 
       firstHeader   = new StickyHeader('#firstHeader');
-      secondHeader  = new StickyHeader('#secondHeader');
+      secondHeader  = new StickyHeader('#secondHeader', {
+        onClick: 'scrollToOrigin'
+      });
       thirdHeader   = new StickyHeader('#thirdHeader');
 
       StickyHeaderStack.containment = {

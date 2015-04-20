@@ -114,6 +114,12 @@
         header.activeStackIndex = -1;
       }
     },
+    _resetStack: function() {
+      _.each( this.activeStack, function( header ) {
+        header.activeStackIndex = -1;
+      });
+      this.activeStack = [];
+    },
 
     getActiveHeaderWithIndex: function(index) {
       if (index < this.activeStack.length) {
@@ -203,6 +209,13 @@
         }
       }
     },
+    emulateScroll: function( options ) {
+      if(options.reset) {
+        this._resetStack();
+      }
+      this.scrollHandler();
+      this.updatePositions();
+    },
     watchScroll: function() {
       var _stack = this;
       $(this.scrollWatch).on('scroll', _.throttle(function() {
@@ -233,6 +246,9 @@
 
     set height( val ) {
       this.$stackProxy.height(val);
+    },
+    get height() {
+      return this.$stackProxy.height();
     },
 
     get stackOffset() {
@@ -341,6 +357,9 @@
     this.sleepCheckInterval           = null;
     this.syncToBaseHeaderInterval     = null;
 
+    // Event binding
+    this.onClick             = options.onClick  || null;
+
     // Cached copies of DOM information
     this._top     = null;
     this._bottom  = null;
@@ -366,6 +385,15 @@
         .attr('id', this.$header.attr('id') + "-sticky")
         .addClass('sticky-header')
         .appendTo(this.stack.$stackProxy);
+
+
+      if(this.onClick) {
+        var _this       = this,
+            clickEvent  = (this.onClick == 'scrollToOrigin') ? function() { _this.scrollToOrigin(); } : this.onClick;
+
+        this.$stickyHeader.on("click", clickEvent );
+        this.$stickyHeader.on("touchend", clickEvent );
+      }
 
       this.updatePosition();
 
@@ -417,9 +445,9 @@
         // Match up the sticky header with the source
         // We cut down on DOM writes by caching the values
         // and only updating the DOM when changes have occurred
-        if(!_header.cachedDOM.class || _header.cachedDOM.class != classes ) {
+        if(!_header.cachedDOM['class'] || _header.cachedDOM['class'] != classes ) {
           _header.$stickyHeader.attr('class', classes);
-          _header.cachedDOM.class = classes;
+          _header.cachedDOM['class'] = classes;
           _changedState = true;
         }
         if(!_header.cachedDOM.html || _header.cachedDOM.html != html ) {
@@ -429,7 +457,7 @@
         }
 
         // Trigger the parent to recalculate positions, since
-        // geometry-related changed may have occurred
+        // geometry-related changes may have occurred
         if(_changedState) {
           _header.stack.updatePositions();
           _changedState = false;
@@ -447,14 +475,18 @@
       }
 
       this.sleepCheckInterval = setInterval( function() {
-        var shouldSleep = _this.shouldSleep();
-        if(shouldSleep && !_this.sleeping) {
-          _this.sleep();
-
-        } else if(!shouldSleep && _this.sleeping ) {
-          _this.wake();
-        }
+        _this.sleepCheck();
       }, 50);
+    },
+
+    sleepCheck: function() {
+      var shouldSleep = this.shouldSleep();
+      if(shouldSleep && !this.sleeping) {
+        this.sleep();
+
+      } else if(!shouldSleep && this.sleeping ) {
+        this.wake();
+      }
     },
 
     shouldSleep: function() {
@@ -472,6 +504,14 @@
     wake: function() {
       this.syncToBaseHeader();
       this.sleeping = false;
+    },
+    scrollToOrigin: function( e ) {
+      $(window).scrollTop( this.$header.position().top - this.bottom );
+      var _this = this;
+      setTimeout( function() {
+        _this.stack.emulateScroll({ reset: true });
+      }, 50);
+
     },
 
 

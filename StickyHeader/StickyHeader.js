@@ -536,8 +536,12 @@
       if(this._top !== null) {
         return this._top;
       } else {
-        var matrix = parseInt(this.$stickyHeader.css('transform').split(',')),
-            top    = matrix[5];
+        var transform = ScreenGeometry.getTransform( this.$stickyHeader ),
+            top       = 0;
+
+        if(transform && transform.y) {
+          top = transform.y;
+        }
 
         if(typeof top === "string") {
           top = parseInt(top.replace('px'));
@@ -556,7 +560,7 @@
       // Set the position IF its a new position
       if(this._top !== newValue) {
         this._top = newValue;
-        this.$stickyHeader.css('transform', 'translateY(' + this._top + 'px)');
+        ScreenGeometry.setTransform( this.$stickyHeader, { y: this._top + 'px'});
       }
     },
 
@@ -692,10 +696,10 @@
         }
         val = Math.round(val);
         if((this.mobileState == "mobile" && this.activeOnMobile) || (this.mobileState != "mobile" && this.activeOnDesktop )) {
-          this.$el.css('transform', 'translateY(' + val + 'px)');
+          ScreenGeometry.setTransform( this.$el, { y: val + 'px'});
 
         } else {
-          this.$el.css('transform', 'translateY(0)');
+          ScreenGeometry.setTransform( this.$el, { y: 0 + 'px'});
         }
 
         this._top = val;
@@ -720,8 +724,7 @@
       if(this._originalTop) {
         return this._originalTop;
       } else {
-        var matrix = parseInt(this.$el.css('transform').split(',')),
-            cssTop    = matrix[5];
+        var cssTop = ScreenGeometry.getTransform( this.$el );
 
         if( (typeof cssTop === 'undefined') || (typeof cssTop == 'string' && cssTop == 'none')) {
           cssTop = 0;

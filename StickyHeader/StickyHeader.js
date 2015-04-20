@@ -336,7 +336,7 @@
     this.$header = $(selector);
     this.$stickyHeader = null;
     this.alwaysActive  = options.alwaysActive || false;
-    this._active       = this.alwaysActive;
+    this._active       = this.alwaysActive || null;
 
     this.activeStackIndex = -1;
 
@@ -561,10 +561,13 @@
     },
 
     get active() {
-      if(this.sleeping) {
-        return this._active;
+      // Temporarily disabling this aspect of the 'sleep' function
+      // because it causes some inconsistency with properly pushing/popping
 
-      }
+      // if(this.sleeping) {
+      //   return this._active;
+      //
+      // }
       if(!this.alwaysActive) {
         var placeholderPosition = this.getPlaceholderPositionInWindow(),
           idx                   = this.activeStackIndex,

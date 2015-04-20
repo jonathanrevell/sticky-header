@@ -218,6 +218,9 @@
     },
     watchScroll: function() {
       var _stack = this;
+      // $(this.scrollWatch).on("touchstart",function(){
+      //   alert("started scrolling")
+      // });
       $(this.scrollWatch).on('scroll', _.throttle(function() {
         _stack.scrollHandler();
         _stack.updatePositions();
@@ -385,7 +388,6 @@
         .attr('id', this.$header.attr('id') + "-sticky")
         .addClass('sticky-header')
         .appendTo(this.stack.$stackProxy);
-
 
       if(this.onClick) {
         var _this       = this,

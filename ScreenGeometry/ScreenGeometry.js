@@ -25,9 +25,9 @@
 
     isPositionInWindow: function( position ) {
       return ( position.left >= 0
-        && position.left <= window.outerWidth
+        && position.left <= window.innerWidth
         && position.top >= 0
-        && position.top <= window.outerHeight);
+        && position.top <= window.innerHeight);
     },
 
     isElementOriginInWindow: function( element ) {

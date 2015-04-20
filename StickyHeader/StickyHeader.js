@@ -490,7 +490,7 @@
     },
 
     shouldSleep: function() {
-      return !ScreenGeometry.isPartOfElementInWindow( this.$header );
+      return !this._active && !ScreenGeometry.isPartOfElementInWindow( this.$header );
     },
 
     sleep: function() {

@@ -82,7 +82,14 @@
         str = str + 'translateY(' + options.y + ')';
       }
 
-      $el.css(_.object(TRANSFORM_LIST, _.map(TRANSFORM_LIST, function() { return str; } )));
+
+      $el.css({
+        'transform': str,
+        '-webkit-transform': str,
+        '-moz-transform': str,
+        '-ms-transform': str,
+        '-o-transform': str,
+      });
     },
 
     isPositionInWindow: function( position ) {

@@ -21,7 +21,7 @@ Headers enter a sleep state when they are scrolled offscreen to reduce polling a
 
 ## Usage
 To create a StickyHeader, use any valid jQuery selector syntax in specifying the source element.
-    new StickyHeader('#myHeaderSelector', { options });
+     new StickyHeader('#myHeaderSelector', { options });
 
 If no StickyHeaderStack is specified, StickyHeaders will stack in the default stack. In most cases you should only need one Stack and will not need to create or specify another.
 

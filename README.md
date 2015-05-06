@@ -26,7 +26,8 @@ To create a StickyHeader, use any valid jQuery selector syntax in specifying the
 If no StickyHeaderStack is specified, StickyHeaders will stack in the default stack. In most cases you should only need one Stack and will not need to create or specify another.
 
 ## Known Issues / Limitations
-The behavior of the StickyPushable is a little quirky right now and is still being worked on.
+1. The behavior of the StickyPushable is a little quirky right now and is still being worked on.
+2. Headers don't stack in the order they are encountered, but are stacked in the order they are added. This will need to be fixed.
 
 ## To Do
 1. Allow sticky headers to stick and stack to any side of the screen to allow for sticky sidebars and footers.

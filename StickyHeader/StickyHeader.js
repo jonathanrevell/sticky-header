@@ -335,10 +335,14 @@
   // options: {
   //     scrollWatch: selector or element to watch,
   //     hideAbove: hides the header above the given y index
+  //     alwaysActive: keep the header sticky at all times
+  //     customLeftAlignment: if false, the default behavior will attempt to align with the source element
+  //     hideOnMobile: hides on mobile if true
+  //     hideOnDesktop: hides on desktop if true
   var StickyHeader = function StickyHeader(selector, options) {
     options = options ? options : {};
 
-    this.$header = $(selector);
+    this.$header       = $(selector).first();
     this.$stickyHeader = null;
     this.alwaysActive  = options.alwaysActive || false;
     this._active       = this.alwaysActive || null;

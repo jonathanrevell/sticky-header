@@ -1,8 +1,9 @@
 /* Sticky Headers  */
 /* Sticky Headers (General)*/
 .sticky-header {
-    position:fixed;
+    position:absolute;
     margin:0;
+    top:0;
 }
 
 .sticky-header.hidden {

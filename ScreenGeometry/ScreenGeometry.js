@@ -1,7 +1,13 @@
 (function(exports) {
   var mobileState = "none";
   var MOBILE_WIDTH_BREAKPOINT = 767;
-
+  var TRANSFORM_LIST = [
+    'transform',
+    '-webkit-transform',
+    '-moz-transform',
+    '-ms-transform',
+    '-o-transform',
+  ];
   // ---------------------------------------------
   //
   //              Screen Geoemetry
@@ -19,15 +25,81 @@
       var $element = $(element),
           offset   = $element.offset();
 
-      return this.positionRelativeToWindow(offset);
+      if(offset) {
+        return this.positionRelativeToWindow(offset);
+      } else {
+        return null;
+      }
+    },
+    getTransform: function( element ) {
+      var $el       = $(element),
+          transform = null;
 
+      // Find the correct property
+      for(var idx = 0; idx < TRANSFORM_LIST.length; idx++) {
+        var _value = $el.css(TRANSFORM_LIST[idx]);
+        if(_value) {
+          transform = _value;
+          break;
+        }
+      }
+
+      if(transform && transform !== 'none') {
+        var kind      = null,
+            result    = {
+              str:    transform,
+              kind:   undefined
+            };
+
+        if(transform.indexOf('matrix') != -1) {
+          var matrix    = parseInt(transform.split(','));
+
+          result.kind   = "matrix";
+          result.x      = matrix[4];
+          result.y      = matrix[5];
+
+        }
+        if(transform.indexOf('translateX') != -1) {
+          result.kind   = "translateX";
+          result.x      = parseInt(transform);
+        }
+        if(transform.indexOf('translateY') != -1) {
+          result.kind   = "translateY";
+          result.y      = parseInt(transform);
+        }
+
+        return result;
+      } else {
+        return null;
+      }
+
+    },
+    setTransform: function( element, options ) {
+      var $el         = $(element),
+          str         = '';
+
+      if(options.x) {
+        str = str + 'translateX(' + options.x + ')';
+      }
+      if(options.y) {
+        str = str + 'translateY(' + options.y + ')';
+      }
+
+
+      $el.css({
+        'transform': str,
+        '-webkit-transform': str,
+        '-moz-transform': str,
+        '-ms-transform': str,
+        '-o-transform': str,
+      });
     },
 
     isPositionInWindow: function( position ) {
       return ( position.left >= 0
-        && position.left <= window.outerWidth
+        && position.left <= window.innerWidth
         && position.top >= 0
-        && position.top <= window.outerHeight);
+        && position.top <= window.innerHeight);
     },
 
     isElementOriginInWindow: function( element ) {
@@ -36,8 +108,10 @@
     },
 
     isPartOfElementInWindow: function( element ) {
-      var origin = this.elementPositionInWindow( element ),
-          pt_bl  = {
+      var origin = this.elementPositionInWindow(element);
+      if (!origin) return false;
+
+      var pt_bl = {
             left: origin.left,
             top: origin.top + $(element).outerHeight()
           },

@@ -610,7 +610,7 @@
       this.sleeping = false;
     },
     scrollToOrigin: function( e ) {
-      $(window).scrollTop( this.$header.position().top - this.bottom - 32 );
+      $(window).scrollTop( this.$header.offset().top - this.bottom - 32 );
       var _this = this;
       setTimeout( function() {
         _this.stack.emulateScroll({ reset: true });

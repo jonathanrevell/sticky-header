@@ -25,8 +25,11 @@
       var $element = $(element),
           offset   = $element.offset();
 
-      return this.positionRelativeToWindow(offset);
-
+      if(offset) {
+        return this.positionRelativeToWindow(offset);
+      } else {
+        return null;
+      }
     },
     getTransform: function( element ) {
       var $el       = $(element),
@@ -105,8 +108,10 @@
     },
 
     isPartOfElementInWindow: function( element ) {
-      var origin = this.elementPositionInWindow( element ),
-          pt_bl  = {
+      var origin = this.elementPositionInWindow(element);
+      if (!origin) return false;
+
+      var pt_bl = {
             left: origin.left,
             top: origin.top + $(element).outerHeight()
           },

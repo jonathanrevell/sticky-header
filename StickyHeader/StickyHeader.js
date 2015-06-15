@@ -1,5 +1,21 @@
 (function(exports) {
 
+  // StickyHeader.js
+  //
+  // Dependencies
+  // - jQuery
+  // - loDash OR Underscore
+  // - ScreenGeometry
+  //
+  // Overview
+  //  - Clones and syncs to existing headers
+  //  - Creates self-managed headers given limits and parameters
+  //  - Headers sleep when off screen
+  // -  Reacts to scrolling, position changes, resizes & orientation change
+  //  - Automatically stacks headers as they become active
+  //  - Seamlessly "lifts" elements off the page
+  //  - Works for most elements including headers and table rows
+
   var SCROLL_BUFFER = 25;
 
   // Manages the stacking of headers on the page
@@ -16,7 +32,9 @@
     this._stackOffset        = options.stackOffset        || null;
     this._stackOffsetMobile  = options.stackOffsetMobile  || null;
     this._containment        = options.containment        || {};
-    this.bottom              = 0;
+
+    this._absoluteMode        = false;
+    this.bottom               = 0;
 
     this.scrollWatch = options.scrollWatch || window;
   };
@@ -31,12 +49,14 @@
       this.setupSubscriptions();
     },
 
+    // Push a StickyHeader onto the stack. Does not make it display.
     push: function(header) {
       header.mobileState = this.mobileState;
 
       this.stack.push(header);
       return this.stack.length - 1;
     },
+    // Pop a StickyHeader off the stack
     pop: function(index) {
       if (index) {
         this.stack.splice(index, 1);
@@ -49,6 +69,10 @@
     // Gets the offset for positioning the element
     calculateHeaderOffsets: function(forIndex, updatePositions) {
       forIndex = forIndex ? forIndex : this.stack.length - 1;
+
+      if(this.absoluteMode) {
+        this.$stackProxy.css('top', $('body').scrollTop());
+      }
 
       var insertionPoint = this.top;
       for (var idx = 0; idx <= forIndex; idx++) {
@@ -73,7 +97,7 @@
       this.bottom = insertionPoint;
       return insertionPoint;
     },
-
+    // Ensures that nothing is places above the header top
     _constrainInsertionPointToHeaderTop: function( insertionPoint, header ) {
       if (header.containment.top && insertionPoint < header.containment.top) {
         insertionPoint = header.containment.top;
@@ -81,6 +105,7 @@
       return insertionPoint;
     },
 
+    // Ensures the insertion point doesn't try to place outside the stack
     _constrainInsertionPointToStackBoundary: function( insertionPoint ) {
       if (this.containment.top && insertionPoint < this.containment.top) {
         insertionPoint = this.containment.top;
@@ -88,6 +113,7 @@
       return insertionPoint;
     },
 
+    // Gets whichever header is actively being displayed before this one
     getPreviousActiveInCategory: function( category ) {
       for(var idx = 0; idx < this.activeStack.length; idx++ ) {
         var header = this.activeStack[idx];
@@ -100,6 +126,7 @@
       return null;
     },
 
+    // Makes an excisting header start displaying
     pushIntoActiveStack: function(header) {
       if(header.activeStackIndex == -1) {
         this.activeStack.push(header);
@@ -107,6 +134,7 @@
       }
     },
 
+    // Removes an existing header from the stacking context (stops displaying)
     removeFromActiveStack: function(header) {
       var idx = header.activeStackIndex;
       if (idx >= 0) {
@@ -114,6 +142,8 @@
         header.activeStackIndex = -1;
       }
     },
+
+    // Removes all the headers from the display state
     _resetStack: function() {
       _.each( this.activeStack, function( header ) {
         header.activeStackIndex = -1;
@@ -121,12 +151,14 @@
       this.activeStack = [];
     },
 
+    // Looks up a header based on its index (order) in the active stack
     getActiveHeaderWithIndex: function(index) {
       if (index < this.activeStack.length) {
         return this.activeStack[index];
       }
     },
 
+    // Gets the total height of all the headers
     getStackHeight: function() {
       var totalHeight = 0;
       for (var idx = 0; idx < this.activeStack.length; idx++) {
@@ -138,6 +170,7 @@
       return totalHeight;
     },
 
+    // Recalculates the positions of all the headers
     updatePositions: function() {
       this.calculateHeaderOffsets(false, true);
       this.height = this.getStackHeight();
@@ -149,6 +182,8 @@
       this.$stackProxy.trigger('PositionsUpdated', [ev]);
     },
 
+    // The stack simplifies mobile state changes by listening for the state change
+    // and then broadcasting the event to the headers
     publishMobileStateChange: function(ev) {
       this.mobileState = ev.state;
 
@@ -158,6 +193,7 @@
       }
     },
 
+    // Sets up all the event bindings
     setupSubscriptions: function() {
       var _stack = this;
 
@@ -172,6 +208,8 @@
       });
     },
 
+    // Monitors the position of elements on the page so the headers
+    // can change state when the position
     addPositionListener: function(header, position, ev, options) {
       options || (options = {});
       this.positionListeners.push({
@@ -189,6 +227,8 @@
         }
       });
     },
+
+    // Handles the scroll event for all the headers
     scrollHandler: function(event) {
       var $watch = $(this.scrollWatch);
 
@@ -209,6 +249,8 @@
         }
       }
     },
+
+    // Some behaviors require an emulated scroll for the headers to behave properly
     emulateScroll: function( options ) {
       if(options.reset) {
         this._resetStack();
@@ -216,6 +258,8 @@
       this.scrollHandler();
       this.updatePositions();
     },
+
+    // Listens for the scroll event
     watchScroll: function() {
       var _stack = this;
       // $(this.scrollWatch).on("touchstart",function(){
@@ -226,6 +270,8 @@
         _stack.updatePositions();
       }, SCROLL_BUFFER));
     },
+
+    // Listens for page resizes
     watchResize: function() {
       var _stack = this;
       $( window ).resize( _.throttle(function() {
@@ -239,12 +285,34 @@
     ///////////////////////////////////////
     //  GETTERS & SETTERS
 
-    get top() {
-      if(this.mobileState != "mobile") {
-        return _.isFunction(this.stackOffset) ? this.stackOffset() : this.stackOffset;
-      } else {
-        return _.isFunction(this.stackOffsetMobile) ? this.stackOffsetMobile : this.stackOffsetMobile;
+    get absoluteMode() {
+      return this._absoluteMode;
+    },
+
+    set absoluteMode( val ) {
+      if(val == this._absoluteMode) return;
+
+      var position = val ? "absolute" : "fixed";
+      this._absoluteMode = val;
+
+      this.$stackProxy.css('position', position);
+      if(!val) {
+        this.$stackProxy.css('top', 0);
       }
+      this.updatePositions();
+    },
+
+    get top() {
+      var offset = 0,
+          base   = 0;
+
+      if(this.mobileState != "mobile") {
+        offset = _.isFunction(this.stackOffset) ? this.stackOffset() : this.stackOffset;
+      } else {
+        offset = _.isFunction(this.stackOffsetMobile) ? this.stackOffsetMobile() : this.stackOffsetMobile;
+      }
+
+      return base + offset;
     },
 
     set height( val ) {
@@ -392,6 +460,8 @@
       this.syncToBaseHeader();
       this.createSleepCheckInterval();
     },
+
+    // Builds the sticky twin of the header
     setupDOM: function() {
       var tagName = this.$header.prop("tagName"),
           $clone  = this.$header.clone();
@@ -440,10 +510,14 @@
       this.updatePosition();
 
     },
+
+    // When a header is a table row we need to identify the table itself
     getNearestTableAncestor: function( el ) {
       var $el    = $(el);
       return $el.parents('table');
     },
+
+    // We have to build 'col' elements in order to enforce sizing
     generateColumnsForTableClone: function( table, clone ) {
       var $table      = $(table),
           $clone      = $(clone),
@@ -485,6 +559,9 @@
         $colGroup.append('<col></col>');
       }
     },
+
+    // We have to build an approximation of the table in order to retain the size
+    // and positioning of the row
     getEmptyCloneOfTable: function( table ) {
       var $table = $(table),
           $clone = $table.clone();
@@ -496,6 +573,8 @@
       this.generateColumnsForTableClone( $table, $clone );
       return $clone;
     },
+
+    // The placeholder is the existing header element that lives in the DOM normally
     getPlaceholderPositionInWindow: function() {
       var position = ScreenGeometry.elementPositionInWindow(this.$header);
       if(position) {
@@ -504,6 +583,8 @@
         return 0;
       }
     },
+
+    // Updates the position of the header
     updatePosition: function() {
       if(!this.customLeftAlignment) {
         var placeholderPosition = this.getPlaceholderPositionInWindow();

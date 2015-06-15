@@ -43,20 +43,20 @@
     <script>
     // This script is for demonstration purposes specific to this example page
     $(document).ready(function(){
-      headerBlocker = new StickyHeaderBoundary('#pageHeader')
+      window.headerBlocker = new StickyHeaderBoundary('#pageHeader')
 
-      alwaysHeader  = new StickyHeader('#alwaysHeader', {
+      window.alwaysHeader  = new StickyHeader('#alwaysHeader', {
         alwaysActive: true
       });
 
-      firstHeader   = new StickyHeader('#firstHeader');
-      secondHeader  = new StickyHeader('#secondHeader', {
+      window.firstHeader   = new StickyHeader('#firstHeader');
+      window.secondHeader  = new StickyHeader('#secondHeader', {
         onClick: 'scrollToOrigin'
       });
-      thirdHeader   = new StickyHeader('#thirdHeader');
+      window.thirdHeader   = new StickyHeader('#thirdHeader');
 
-      fruitSectionHeader  = new StickyHeader('#fruitSectionHeader');
-      fruitTableHeader    = new StickyHeader('#fruitTableHeaders');
+      window.fruitSectionHeader  = new StickyHeader('#fruitSectionHeader');
+      window.fruitTableHeader    = new StickyHeader('#fruitTableHeaders');
 
       StickyHeaderStack.containment = {
         get top() {
@@ -64,7 +64,7 @@
         }
       }
 
-      inlinePushable  = new StickyPushable('#inlineObject', {
+      window.inlinePushable  = new StickyPushable('#inlineObject', {
         pusher: StickyHeaderStack,
         activeOnMobile: false,
       });

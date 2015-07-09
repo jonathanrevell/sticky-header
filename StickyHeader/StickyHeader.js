@@ -1,4 +1,4 @@
-(function(exports) {
+(function(exports, ScreenGeometry, TableSplicer) {
 
   // StickyHeader.js
   //
@@ -469,24 +469,19 @@
       if(tagName == 'THEAD' || tagName == 'TR') {
         $clone.attr('id', $clone.attr('id') + '-sticky');
 
-        var $table      = this.getNearestTableAncestor( this.$header );
-            $tableClone = this.getEmptyCloneOfTable( $table );
-
-        $tableClone.css('max-width', $table.width());
-
-        var $target = $tableClone;
+        var $table      = this.getNearestTableAncestor( this.$header ),
+            $tableClone;
 
         switch(tagName) {
           case 'THEAD':
-            $tableClone.remove('thead');
-            $target = $tableClone;
+            $tableClone = TableSplicer.cloneHeader( $table );
             break;
           case 'TR':
-            $target = $tableClone.find('thead');
+            $tableClone = TableSplicer.cloneHeaderRow( $table, this.$header );
             break;
         }
+        $tableClone.attr('id', $tableClone.attr('id') + '-sticky');
 
-        $target.append($clone);
         this.$stickyHeader = $tableClone;
         this.type          = 'thead';
 
@@ -515,63 +510,6 @@
     getNearestTableAncestor: function( el ) {
       var $el    = $(el);
       return $el.parents('table');
-    },
-
-    // We have to build 'col' elements in order to enforce sizing
-    generateColumnsForTableClone: function( table, clone ) {
-      var $table      = $(table),
-          $clone      = $(clone),
-
-          $sampleCells  = $table.find('tr:first-child td');
-
-      this.fillColumnsInTableClone( table, clone );
-
-      var widths = _.map( $sampleCells, function( cell ) {
-        return  $(cell).width();
-      });
-
-      var zipped = _.zip( $clone.find('colgroup col'), widths);
-
-      _.each( zipped, function( item ) {
-        var $el     = $(item[0]),
-            width   = item[1];
-        $el.width( width );
-      });
-    },
-    // Checks if the source table already has columns and fills in any
-    // missing ones
-    fillColumnsInTableClone: function( table, clone ) {
-      var $table      = $(table),
-          $clone      = $(clone),
-
-          $sampleRow    = $table.find('tr:first-child'),
-          $colGroup     = $table.find('colgroup'),
-
-          $cloneCols;
-
-      if($colGroup.length === 0) {
-        $colGroup = $('<colgroup></colgroup>');
-        $clone.prepend( $colGroup );
-      }
-      $cloneCols    = $colGroup.find('col');
-
-      while($colGroup.find('col').length < $sampleRow.find('td').length) {
-        $colGroup.append('<col></col>');
-      }
-    },
-
-    // We have to build an approximation of the table in order to retain the size
-    // and positioning of the row
-    getEmptyCloneOfTable: function( table ) {
-      var $table = $(table),
-          $clone = $table.clone();
-
-      $clone.find('tbody').html('');
-      $clone.find('thead').html('');
-      $clone.attr('id', $clone.attr('id') + '-sticky');
-
-      this.generateColumnsForTableClone( $table, $clone );
-      return $clone;
     },
 
     // The placeholder is the existing header element that lives in the DOM normally
@@ -941,4 +879,4 @@
   exports.StickyHeader          = StickyHeader;
   exports.StickyPushable        = StickyPushable;
   exports.StickyHeaderBoundary  = StickyHeaderBoundary;
-})(window);
+})(window, ScreenGeometry, TableSplicer);

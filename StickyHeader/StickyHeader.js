@@ -330,7 +330,12 @@
         return this._stackOffset;
 
       } else if(typeof this._stackOffset === 'string' || this._stackOffset instanceof $) {
-        return $(this._stackOffset).outerHeight();
+        var $offset = $(this._stackOffset);
+        if($offset.css('position') == 'fixed' || $offset.css('position') == 'absolute') {
+          return $offset.outerHeight();
+        } else {
+          return 0;
+        }
 
       }
     },
@@ -342,13 +347,20 @@
 
     get stackOffsetMobile() {
       if(!this._stackOffsetMobile) {
-        return this.stackOffset;  //Fallback to the stack offset if no mobile option is defined
+        return this.stackOffset;  //Fallback to the stack offset if no mobile option is define\d
       }
       if(typeof this._stackOffsetMobile === 'number') {
         return this._stackOffsetMobile;
 
       } else if(typeof this._stackOffsetMobile === 'string' || this._stackOffsetMobile instanceof $) {
-        return $(this._stackOffsetMobile).outerHeight();
+
+        var $offset = $(this._stackOffsetMobile);
+        if($offset.css('position') == 'fixed' || $offset.css('position') == 'absolute') {
+          return $offset.outerHeight();
+        } else {
+          return 0;
+        }
+
 
       }
     },

@@ -41,7 +41,7 @@
   StickyHeaderStack.prototype = {
 
     initialize: function( options ) {
-      this.$stackProxy = $('<div style="width:100%;position:fixed;top:0;left:0;"></div>');
+      this.$stackProxy = $('<div style="width:100%;position:fixed;top:0;left:0;z-index:100;"></div>');
       this.$stackProxy
         .addClass('sticky-stack')
         .appendTo('body');

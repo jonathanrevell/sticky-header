@@ -1,3 +1,6 @@
+// ScreenGeometry.js
+// Jonathan Revell H
+
 (function(exports) {
   var mobileState = "none";
   var MOBILE_WIDTH_BREAKPOINT = 767;

@@ -1,4 +1,4 @@
-(function(exports, ScreenGeometry, TableSplicer) {
+(function(exports, screenGeometry) {
 
   // StickyHeader.js
   //
@@ -32,6 +32,11 @@
     this._stackOffset        = options.stackOffset        || null;
     this._stackOffsetMobile  = options.stackOffsetMobile  || null;
     this._containment        = options.containment        || {};
+    this._root               = options.root               || 'body';
+
+    this.resizeEvent            = null;
+    this.mobileStateChangeEvent = null;
+    this.scrollEvent            = null;
 
     this._absoluteMode        = false;
     this.bottom               = 0;
@@ -44,7 +49,7 @@
       this.$stackProxy = $('<div style="width:100%;position:fixed;top:0;left:0;z-index:100;"></div>');
       this.$stackProxy
         .addClass('sticky-stack')
-        .appendTo('body');
+        .appendTo(this._root);
 
       this.setupSubscriptions();
     },
@@ -56,13 +61,29 @@
       this.stack.push(header);
       return this.stack.length - 1;
     },
+
     // Pop a StickyHeader off the stack
     pop: function(index) {
+      var header;
+
       if (index) {
-        this.stack.splice(index, 1);
-        this.updatePositions();
+        header = this.stack.splice(index, 1)[0];
       } else {
-        this.stack.pop();
+        header = this.stack.pop();
+      }
+      this.removeFromActiveStack(header);
+      this._resetStack();
+      this.updatePositions();
+    },
+
+    // Pops a header off the stack by reference
+    popHeader: function( header ) {
+      var index = this.stack.indexOf(header);
+
+      if(index > -1)  {
+        this.pop(index);
+      } else {
+        throw "Cannot find header in StickyHeaderStack to pop";
       }
     },
 
@@ -126,7 +147,7 @@
       return null;
     },
 
-    // Makes an excisting header start displaying
+    // Makes an existing header start displaying
     pushIntoActiveStack: function(header) {
       if(header.activeStackIndex == -1) {
         this.activeStack.push(header);
@@ -152,9 +173,11 @@
     },
 
     // Looks up a header based on its index (order) in the active stack
-    getActiveHeaderWithIndex: function(index) {
+    getActiveHeaderWithIndex: function(index, resolveOutOfBounds) {
       if (index < this.activeStack.length) {
         return this.activeStack[index];
+      } else if( resolveOutOfBounds ) {
+        return this.activeStack[this.activeStack.length - 1];
       }
     },
 
@@ -200,32 +223,28 @@
       this.watchScroll();
       this.watchResize();
 
-      this.mobileState = ScreenGeometry.getState();
+      if(screenGeometry){
+        this.mobileState = screenGeometry.getState();
+      }
 
-      $(document).on("mobileStateChange", function(event, data) {
+      this.mobileStateChangeEvent = function(event, data) {
         _stack.publishMobileStateChange(data);
         _stack.updatePositions();
-      });
+      };
+
+      $(document).on("mobileStateChange", this.mobileStateChangeEvent);
     },
 
-    // Monitors the position of elements on the page so the headers
-    // can change state when the position
-    addPositionListener: function(header, position, ev, options) {
-      options || (options = {});
-      this.positionListeners.push({
-        _position: position,
-        ev: ev,
-        previousState: "none",
-        frequency: options.frequency || "change",
-        header: header,
 
-        set position(val) {
-          this._position = val;
-        },
-        get position() {
-          return (typeof this._position == "number") ? this._position : this._position();
-        }
-      });
+    unbindEvents: function() {
+      if(this.resizeEvent)
+        $(window).off('resize', this.resizeEvent);
+
+      if(this.mobileStateChangeEvent)
+        $(document).off('mobileStateChange', this.mobileStateChangeEvent);
+
+      if(this.scrollEvent)
+        $(this.scrollWatch).off('scroll', this.scrollEvent);
     },
 
     // Handles the scroll event for all the headers
@@ -262,24 +281,41 @@
     // Listens for the scroll event
     watchScroll: function() {
       var _stack = this;
-      // $(this.scrollWatch).on("touchstart",function(){
-      //   alert("started scrolling")
-      // });
-      $(this.scrollWatch).on('scroll', _.throttle(function() {
+      this.scrollEvent = _.throttle(function() {
         _stack.scrollHandler();
         _stack.updatePositions();
-      }, SCROLL_BUFFER));
+      }, SCROLL_BUFFER)
+      $(this.scrollWatch).on('scroll', this.scrollEvent );
     },
 
     // Listens for page resizes
     watchResize: function() {
       var _stack = this;
-      $( window ).resize( _.throttle(function() {
+      this.resizeEvent = _.throttle(function() {
         for (var idx = 0; idx < _stack.stack.length; idx++) {
           var header = _stack.stack[idx];
           header.updatePosition();
         }
-      }, SCROLL_BUFFER));
+      }, SCROLL_BUFFER);
+      $( window ).resize( this.resizeEvent );
+    },
+
+    delete: function() {
+      // Remove all the headers from active state
+      this._resetStack();
+
+      // Unbind all the event listeners
+      this.unbindEvents();
+
+      // Delete each header and clear the stack
+      _.each(this.stack, function(header) {
+        header.delete(true);
+      });
+      this.stack = [];
+
+      // Clean up the stack proxy from the DOM
+      if(this.$stackProxy)
+        this.$stackProxy.remove();
     },
 
     ///////////////////////////////////////
@@ -389,7 +425,7 @@
   };
   StickyHeaderBoundary.prototype = {
     get top() {
-      var position = ScreenGeometry.elementPositionInWindow(this.$boundary);
+      var position = screenGeometry.elementPositionInWindow(this.$boundary);
       if(position) {
         return position.top;
       } else {
@@ -422,6 +458,13 @@
   var StickyHeader = function StickyHeader(selector, options) {
     options = options ? options : {};
 
+    var _el             = $(selector);
+    if(!_el || _el.length === 0) {
+      //Invalid selector, cannot create
+      return null;
+    }
+
+    this.selector      = selector;
     this.$header       = $(selector).first();
     this.$stickyHeader = null;
     this.alwaysActive  = options.alwaysActive || false;
@@ -440,15 +483,15 @@
     this.placeholder  = options.placeholder || "clone";
     this.mobileState  = 'none';
 
+    // Observation
+    this.observer               = null;
+    this.parentObserver         = null;
+    this.pendingDisplayChange   = false;    // Used to note self-inflicted changes
+
     this.containment = options.containment || {};
 
     this.hideOnDesktop = options.hideOnDesktop || false;
     this.hideOnMobile = options.hideOnMobile || false;
-
-    this.sleeping = false;
-
-    this.sleepCheckInterval           = null;
-    this.syncToBaseHeaderInterval     = null;
 
     // Event binding
     this.onClick             = options.onClick  || null;
@@ -470,7 +513,7 @@
       StickyHeaderStack.updatePositions();
 
       this.syncToBaseHeader();
-      this.createSleepCheckInterval();
+      this.createMutationObserver();
     },
 
     // Builds the sticky twin of the header
@@ -481,19 +524,24 @@
       if(tagName == 'THEAD' || tagName == 'TR') {
         $clone.attr('id', $clone.attr('id') + '-sticky');
 
-        var $table      = this.getNearestTableAncestor( this.$header ),
-            $tableClone;
+        var $table      = this.getNearestTableAncestor( this.$header );
+            $tableClone = this.getEmptyCloneOfTable( $table );
+
+        $tableClone.css('max-width', $table.width());
+
+        var $target = $tableClone;
 
         switch(tagName) {
           case 'THEAD':
-            $tableClone = TableSplicer.cloneHeader( $table );
+            $tableClone.remove('thead');
+            $target = $tableClone;
             break;
           case 'TR':
-            $tableClone = TableSplicer.cloneHeaderRow( $table, this.$header );
+            $target = $tableClone.find('thead');
             break;
         }
-        $tableClone.attr('id', $tableClone.attr('id') + '-sticky');
 
+        $target.append($clone);
         this.$stickyHeader = $tableClone;
         this.type          = 'thead';
 
@@ -524,9 +572,66 @@
       return $el.parents('table');
     },
 
+    // We have to build 'col' elements in order to enforce sizing
+    generateColumnsForTableClone: function( table, clone ) {
+      var $table      = $(table),
+          $clone      = $(clone),
+
+          $sampleCells  = $table.find('tr:first-child td');
+
+      this.fillColumnsInTableClone( table, clone );
+
+      var widths = _.map( $sampleCells, function( cell ) {
+        return  $(cell).width();
+      });
+
+      var zipped = _.zip( $clone.find('colgroup col'), widths);
+
+      _.each( zipped, function( item ) {
+        var $el     = $(item[0]),
+            width   = item[1];
+        $el.width( width );
+      });
+    },
+    // Checks if the source table already has columns and fills in any
+    // missing ones
+    fillColumnsInTableClone: function( table, clone ) {
+      var $table      = $(table),
+          $clone      = $(clone),
+
+          $sampleRow    = $table.find('tr:first-child'),
+          $colGroup     = $table.find('colgroup'),
+
+          $cloneCols;
+
+      if($colGroup.length === 0) {
+        $colGroup = $('<colgroup></colgroup>');
+        $clone.prepend( $colGroup );
+      }
+      $cloneCols    = $colGroup.find('col');
+
+      while($colGroup.find('col').length < $sampleRow.find('td').length) {
+        $colGroup.append('<col></col>');
+      }
+    },
+
+    // We have to build an approximation of the table in order to retain the size
+    // and positioning of the row
+    getEmptyCloneOfTable: function( table ) {
+      var $table = $(table),
+          $clone = $table.clone();
+
+      $clone.find('tbody').html('');
+      $clone.find('thead').html('');
+      $clone.attr('id', $clone.attr('id') + '-sticky');
+
+      this.generateColumnsForTableClone( $table, $clone );
+      return $clone;
+    },
+
     // The placeholder is the existing header element that lives in the DOM normally
     getPlaceholderPositionInWindow: function() {
-      var position = ScreenGeometry.elementPositionInWindow(this.$header);
+      var position = screenGeometry.elementPositionInWindow(this.$header);
       if(position) {
         return position;
       } else {
@@ -542,104 +647,120 @@
       }
     },
 
-    stopSyncToBaseHeader: function() {
-      if( this.syncToBaseHeaderInterval ) {
-        clearInterval( this.syncToBaseHeaderInterval );
-      }
-      this.syncToBaseHeaderInterval = null;
-    },
-
     syncToBaseHeader: function() {
       var _header         = this,
           _changedState   = false;
 
-      this.stopSyncToBaseHeader();
       if(this.type == 'thead') return;
 
-      this.syncToBaseHeaderInterval = setInterval( function() {
-        var stickyDisplay = _header.$stickyHeader.css('display'),
-            baseDisplay   = _header.$header.css('display'),
-            classes = _header.$header.attr('class'),
-            html = _header.$header.html();
+      if( !document.querySelector(this.selector) ) {
+        // The source element no longer exists. Delete self
+        this.delete();
+        return;
+      }
 
-        classes = classes ? classes + ' sticky-header' : 'sticky-header';
-        classes = _header.$stickyHeader.hasClass('active') ? classes + ' active' : classes;
+      var stickyDisplay = _header.$stickyHeader.css('display'),
+          baseDisplay   = _header.$header.css('display'),
+          classes       = _header.$header.attr('class'),
+          html          = _header.$header.html();
 
+      classes = classes ? classes + ' sticky-header' : 'sticky-header';
+      classes = _header.$stickyHeader.hasClass('active') ? classes + ' active' : classes;
 
-        if(stickyDisplay != baseDisplay) {
-          if(_header.$header.css('display') == 'none' && _header.$stickyHeader.css('display') != 'none' ) {
-            _header.$stickyHeader.css('display', 'none');
-            _changedState = true;
+      // If the stickyDisplay doesn't match the baseDisplay
+      if(stickyDisplay != baseDisplay) {
+        if((_header.$header.css('display') == 'none' || _header.$header.css('visibility') == 'hidden') && _header.$stickyHeader.css('display') != 'none' ) {
+          _header.$stickyHeader.css('display', 'none');
+          _changedState = true;
 
-          } else if(_header.$stickyHeader.css('display') != 'block' ) {
-            _header.$stickyHeader.css('display', 'block');
-            _changedState = true;
+        } else if(_header.$stickyHeader.css('display') != 'block' ) {
+          _header.$stickyHeader.css('display', 'block');
+          _changedState = true;
+        }
+      }
+
+      // Match up the sticky header with the source
+      // We cut down on DOM writes by caching the values
+      // and only updating the DOM when changes have occurred
+      if(!_header.cachedDOM['class'] || _header.cachedDOM['class'] != classes ) {
+        _header.$stickyHeader.attr('class', classes);
+        _header.cachedDOM['class'] = classes;
+        _changedState = true;
+      }
+      if(!_header.cachedDOM.html || _header.cachedDOM.html != html ) {
+        _header.$stickyHeader.html(html);
+        _header.cachedDOM.html = html;
+        _changedState = true;
+      }
+
+      // Trigger the parent to recalculate positions, since
+      // geometry-related changes may have occurred
+      if(_changedState) {
+        _header.stack.updatePositions();
+        _changedState = false;
+      }
+    },
+
+    createMutationObserver: function() {
+      var header = this;
+
+      // Make sure MutationObserver is supported
+      if( !MutationObserver ) return;
+
+      // Watches for content and style changes
+      this.observer = new MutationObserver( function(mutations) {
+        if( !header.pendingDisplayChange ) {
+          mutations.forEach(function(mutation) {
+              console.log("Mutation:",mutation);
+          });
+          header.syncToBaseHeader();
+        } else {
+          // The pending change has been observed, so unset it
+          header.pendingDisplayChange = false;
+
+        }
+      });
+
+      // Watches for deletion of the element
+      this.parentObserver = new MutationObserver( function(mutations) {
+        console.log("mutations", mutations);
+        mutations.forEach(function(mutation) {
+          if(mutation.type == "childList" && mutation.removedNodes.length > 0) {
+
+            // Read through the removed nodes
+            for(var idx = 0; idx < mutation.removedNodes.length; idx++) {
+              var node = mutation.removedNodes[idx];
+
+              if(node == header.$header[0]) {
+                //The header was removed, delete it
+                header.delete();
+              }
+            }
           }
-        }
+        });
+      });
 
-        // Match up the sticky header with the source
-        // We cut down on DOM writes by caching the values
-        // and only updating the DOM when changes have occurred
-        if(!_header.cachedDOM['class'] || _header.cachedDOM['class'] != classes ) {
-          _header.$stickyHeader.attr('class', classes);
-          _header.cachedDOM['class'] = classes;
-          _changedState = true;
-        }
-        if(!_header.cachedDOM.html || _header.cachedDOM.html != html ) {
-          _header.$stickyHeader.html(html);
-          _header.cachedDOM.html = html;
-          _changedState = true;
-        }
+      // Observe the header itself for changes
+      this.observer.observe( this.$header[0], {
+        attributes: true,
+        childList: true,
+        characterData: true
+      });
 
-        // Trigger the parent to recalculate positions, since
-        // geometry-related changes may have occurred
-        if(_changedState) {
-          _header.stack.updatePositions();
-          _changedState = false;
-        }
-
-      }, 1000);
+      // Observe the parent to watch for the removal of the element
+      this.parentObserver.observe( this.$header[0].parentElement, {
+        childList: true
+      });
     },
 
-    createSleepCheckInterval: function() {
-      var _this = this;
+    removeObservers: function() {
+      if(this.parentObserver)
+        this.parentObserver.disconnect();
 
-      if( this.sleepCheckInterval ) {
-        clearInterval( this.sleepCheckInterval );
-        this.sleepCheckInterval = null;
-      }
-
-      this.sleepCheckInterval = setInterval( function() {
-        _this.sleepCheck();
-      }, 50);
+      if(this.observer)
+        this.observer.disconnect();
     },
 
-    sleepCheck: function() {
-      var shouldSleep = this.shouldSleep();
-      if(shouldSleep && !this.sleeping) {
-        this.sleep();
-
-      } else if(!shouldSleep && this.sleeping ) {
-        this.wake();
-      }
-    },
-
-    shouldSleep: function() {
-      return !this._active && !ScreenGeometry.isPartOfElementInWindow( this.$header );
-    },
-
-    sleep: function() {
-      this.stopSyncToBaseHeader();
-      this.sleeping = true;
-
-      // Reset the cached properties just to be safe
-      this._top = null;
-    },
-
-    wake: function() {
-      this.syncToBaseHeader();
-      this.sleeping = false;
-    },
     scrollToOrigin: function( e ) {
       $(window).scrollTop( this.$header.offset().top - this.bottom - 32 );
       var _this = this;
@@ -647,6 +768,50 @@
         _this.stack.emulateScroll({ reset: true });
       }, 50);
 
+    },
+
+    _showStickyHeader: function() {
+      this._active = true;
+
+      // pendingDisplayChange must be set to true before the object
+      // manipulates itself to avoid creating false positives on changes
+      this.pendingDisplayChange = true;
+
+
+      this.syncToBaseHeader();
+      this.$stickyHeader.addClass('active');
+      this.$stickyHeader.css('visibility', 'visible');
+      this.$header.css('visibility', 'hidden');
+    },
+
+    _hideStickyHeader: function() {
+      this._active = false;
+
+      // pendingDisplayChange must be set to true before the object
+      // manipulates itself to avoid creating false positives on changes
+      this.pendingDisplayChange = true;
+
+
+      this.$stickyHeader.removeClass('active');
+      this.$stickyHeader.css('visibility', 'hidden');
+      this.$header.css('visibility', 'visible');
+    },
+
+    delete: function(skipPop) {
+      clearInterval(this.sleepCheckInterval);
+      this.removeObservers();
+
+      // When the stack is deleting everything, we don't
+      // want to pop the header from the stack
+      if(!skipPop) {
+        // Remove self from the stack
+        this.stack.popHeader(this);
+      }
+
+      if(this.$stickyHeader)
+        this.$stickyHeader.remove();
+
+      this._hideStickyHeader();
     },
 
 
@@ -669,7 +834,7 @@
       if(this._top !== null) {
         return this._top;
       } else {
-        var transform = ScreenGeometry.getTransform( this.$stickyHeader ),
+        var transform = screenGeometry.getTransform( this.$stickyHeader ),
             top       = 0;
 
         if(transform && transform.y) {
@@ -693,45 +858,35 @@
       // Set the position IF its a new position
       if(this._top !== newValue) {
         this._top = newValue;
-        ScreenGeometry.setTransform( this.$stickyHeader, { y: this._top + 'px'});
+        screenGeometry.setTransform( this.$stickyHeader, { y: this._top + 'px'});
       }
     },
 
+
+
     get active() {
-      // Temporarily disabling this aspect of the 'sleep' function
-      // because it causes some inconsistency with properly pushing/popping
-
-      // if(this.sleeping) {
-      //   return this._active;
-      //
-      // }
+      var placeholderPosition, idx, stackLength, bottom;
       if(!this.alwaysActive) {
-        var placeholderPosition = this.getPlaceholderPositionInWindow(),
-          idx                   = this.activeStackIndex,
-          stackLength           = this.stack.activeStack.length,
-          bottom;
+        placeholderPosition = this.getPlaceholderPositionInWindow();
+        idx                   = this.activeStackIndex;
+        stackLength           = this.stack.activeStack.length;
 
-      if(idx == 0) {
+      if(idx === 0) {
           bottom = this.stack.top;
 
         } else if(idx > 0) {
-          bottom = this.stack.getActiveHeaderWithIndex(idx - 1).bottom;
+          bottom = this.stack.getActiveHeaderWithIndex(idx - 1, true).bottom;
 
         } else {
           bottom = this.stack.bottom;
         }
       }
 
-      if (this.alwaysActive || placeholderPosition.top <= bottom) {
-        this._active = true;
-        this.$stickyHeader.addClass('active');
-        this.$stickyHeader.css('visibility', 'visible');
-        this.$header.css('visibility', 'hidden');
+      // Show the header if alwaysActive OR if the header is above its origin AND the source header is displaying
+      if (this.alwaysActive || (placeholderPosition.top <= bottom && this.$header.css('display') != 'none')) {
+        this._showStickyHeader();
       } else {
-        this._active = false;
-        this.$stickyHeader.removeClass('active');
-        this.$stickyHeader.css('visibility', 'hidden');
-        this.$header.css('visibility', 'visible');
+        this._hideStickyHeader();
       }
 
       return this._active;
@@ -829,10 +984,10 @@
         }
         val = Math.round(val);
         if((this.mobileState == "mobile" && this.activeOnMobile) || (this.mobileState != "mobile" && this.activeOnDesktop )) {
-          ScreenGeometry.setTransform( this.$el, { y: val + 'px'});
+          screenGeometry.setTransform( this.$el, { y: val + 'px'});
 
         } else {
-          ScreenGeometry.setTransform( this.$el, { y: 0 + 'px'});
+          screenGeometry.setTransform( this.$el, { y: 0 + 'px'});
         }
 
         this._top = val;
@@ -857,7 +1012,7 @@
       if(this._originalTop) {
         return this._originalTop;
       } else {
-        var cssTop = ScreenGeometry.getTransform( this.$el );
+        var cssTop = screenGeometry.getTransform( this.$el );
 
         if( (typeof cssTop === 'undefined') || (typeof cssTop == 'string' && cssTop == 'none')) {
           cssTop = 0;
@@ -884,11 +1039,16 @@
   StickyHeaderStack = new StickyHeaderStack();
 
   $(document).ready(function() {
-    StickyHeaderStack.initialize();
+    var options = {};
+
+    if($('#orderSummaryRoot').length > 0) {
+      options._root = '#orderSummaryRoot';
+    }
+    StickyHeaderStack.initialize(options);
   });
 
   exports.StickyHeaderStack     = StickyHeaderStack;
   exports.StickyHeader          = StickyHeader;
   exports.StickyPushable        = StickyPushable;
   exports.StickyHeaderBoundary  = StickyHeaderBoundary;
-})(window, ScreenGeometry, TableSplicer);
+})(window, ScreenGeometry);

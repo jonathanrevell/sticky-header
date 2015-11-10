@@ -704,61 +704,69 @@
     createMutationObserver: function() {
       var header = this;
 
-      // Make sure MutationObserver is supported
-      if( !MutationObserver ) return;
-
-      // Watches for content and style changes
-      this.observer = new MutationObserver( function(mutations) {
-        if( !header.pendingDisplayChange ) {
-          mutations.forEach(function(mutation) {
-              console.log("Mutation:",mutation);
-          });
+      try {
+        // Watches for content and style changes
+        this.observer = new MutationObserver( function(mutations) {
           header.syncToBaseHeader();
-        } else {
-          // The pending change has been observed, so unset it
-          header.pendingDisplayChange = false;
+        });
 
-        }
-      });
+        // Watches for deletion of the element
+        this.parentObserver = new MutationObserver( function(mutations) {
+          mutations.forEach(function(mutation) {
+            if(mutation.type == "childList" && mutation.removedNodes.length > 0) {
 
-      // Watches for deletion of the element
-      this.parentObserver = new MutationObserver( function(mutations) {
-        console.log("mutations", mutations);
-        mutations.forEach(function(mutation) {
-          if(mutation.type == "childList" && mutation.removedNodes.length > 0) {
+              // Read through the removed nodes
+              for(var idx = 0; idx < mutation.removedNodes.length; idx++) {
+                var node = mutation.removedNodes[idx];
 
-            // Read through the removed nodes
-            for(var idx = 0; idx < mutation.removedNodes.length; idx++) {
-              var node = mutation.removedNodes[idx];
-
-              if(node == header.$header[0]) {
-                //The header was removed, delete it
-                header.delete();
+                if(node == header.$header[0]) {
+                  //The header was removed, delete it
+                  header.delete();
+                }
               }
             }
-          }
+          });
         });
-      });
 
-      // Observe the header itself for changes
-      this.observer.observe( this.$header[0], {
-        attributes: true,
-        childList: true,
-        characterData: true
-      });
+        // Observe the header itself for changes
+        this.observer.observe( this.$header[0], {
+          attributes: true,
+          childList: true,
+          characterData: true
+        });
 
-      // Observe the parent to watch for the removal of the element
-      this.parentObserver.observe( this.$header[0].parentElement, {
-        childList: true
-      });
+        // Observe the parent to watch for the removal of the element
+        this.parentObserver.observe( this.$header[0].parentElement, {
+          childList: true
+        });
+
+
+      } catch (e) {
+        console.log("StickyHeader falling back to older browser support mode", e);
+
+        // Try fallbacks for older browsers
+        header.$header.on("propertychange DOMAttrModified", function() {
+          header.syncToBaseHeader();
+        });
+
+        this.$header.parent().on("propertychange DOMAttrModified", function() {
+          header.syncToBaseHeader();
+        });
+
+      }
+
     },
 
     removeObservers: function() {
       if(this.parentObserver)
         this.parentObserver.disconnect();
+      else
+        this.$header.off("propertychange DOMAttrModified", "**");
 
       if(this.observer)
         this.observer.disconnect();
+      else
+        this.$header.parent().off("propertychange DOMAttrModified", "**");
     },
 
     scrollToOrigin: function( e ) {

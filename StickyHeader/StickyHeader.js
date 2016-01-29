@@ -54,6 +54,29 @@
       this.setupSubscriptions();
     },
 
+    // Reinitialize will de-init and re-init
+    // Unlike delete, this does not delete the headers
+    reinitialize: function( options ) {
+      // Remove all the headers from active state
+      this._resetStack();
+
+      // Unbind all the event listeners
+      this.unbindEvents();
+
+      // Clean up the stack proxy from the DOM
+      this.removeStackProxy();
+
+      // Re-init
+      this.initialize( options );
+      this.reinitializeHeaders();
+    },
+
+    reinitializeHeaders: function() {
+      _.each(this.stack, function( stickyHeader ) {
+        stickyHeader.rebuildStickyPart();
+      });
+    },
+
     // Push a StickyHeader onto the stack. Does not make it display.
     push: function(header) {
       header.mobileState = this.mobileState;
@@ -63,7 +86,7 @@
     },
 
     // Pop a StickyHeader off the stack
-    pop: function(index) {
+    pop: function(index, skipRebuild) {
       var header;
 
       if (index) {
@@ -71,9 +94,11 @@
       } else {
         header = this.stack.pop();
       }
-      this.removeFromActiveStack(header);
-      this._resetStack();
-      this.updatePositions();
+      if(!skipRebuild) {
+        this.removeFromActiveStack(header);
+        this._resetStack();
+        this.updatePositions();
+      }
     },
 
     // Pops a header off the stack by reference
@@ -101,7 +126,7 @@
         var header = this.stack[idx];
         if (updatePositions) {
 
-          if (header.active) {
+          if (header && header.active) {
             this.pushIntoActiveStack(header);
 
             insertionPoint = this._constrainInsertionPointToHeaderTop( insertionPoint, header );
@@ -109,8 +134,12 @@
 
             header.top = insertionPoint;
 
-          } else {
+          } else if (header) {
             this.removeFromActiveStack(header);
+
+          } else {
+            // The header no longer exists, stop tracking it
+            this.pop(index, true);
           }
         }
         insertionPoint += header.currentHeight;
@@ -300,7 +329,7 @@
       $( window ).resize( this.resizeEvent );
     },
 
-    delete: function() {
+    remove: function() {
       // Remove all the headers from active state
       this._resetStack();
 
@@ -309,11 +338,15 @@
 
       // Delete each header and clear the stack
       _.each(this.stack, function(header) {
-        header.delete(true);
+        header.remove(true);
       });
       this.stack = [];
 
       // Clean up the stack proxy from the DOM
+      this.removeStackProxy();
+    },
+
+    removeStackProxy: function() {
       if(this.$stackProxy)
         this.$stackProxy.remove();
     },
@@ -516,6 +549,22 @@
       this.createMutationObserver();
     },
 
+    // This causes a de-init to occur, and immediately sets up the header again
+    rebuildStickyPart: function() {
+      if(this.$stickyHeader && this.$stickyHeader.length > 0) {
+        // de-init
+        this.removeObservers();
+        this.$stickyHeader.remove();
+        this.$stickyHeader = null;
+
+        // re-init
+        this.setupDOM();
+        this.createMutationObserver();
+        this.syncToBaseHeader();
+        this.createMutationObserver();
+      }
+    },
+
     // Builds the sticky twin of the header
     setupDOM: function() {
       var tagName = this.$header.prop("tagName"),
@@ -655,7 +704,7 @@
 
       if( !document.querySelector(this.selector) ) {
         // The source element no longer exists. Delete self
-        this.delete();
+        this.remove();
         return;
       }
 
@@ -721,7 +770,7 @@
 
                 if(node == header.$header[0]) {
                   //The header was removed, delete it
-                  header.delete();
+                  header.remove();
                 }
               }
             }
@@ -805,7 +854,7 @@
       this.$header.css('visibility', 'visible');
     },
 
-    delete: function(skipPop) {
+    remove: function(skipPop) {
       clearInterval(this.sleepCheckInterval);
       this.removeObservers();
 
@@ -898,7 +947,7 @@
       }
 
       return this._active;
-    },
+    }
   };
 
   // A sticky pushable won't be part of a stacking context, but it will be pushed by

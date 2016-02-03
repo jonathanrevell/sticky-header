@@ -7,6 +7,7 @@ Copy the StickyHeader and ScreenGeometry folders into your project and include t
 ### Dependencies
 1. [jQuery](https://jquery.com/)
 2. [loDash](https://lodash.com/) *or* [Underscore](http://underscorejs.org/)
+3. Screen Geometry
 
 ## Behavior
 The default StickyHeader behavior is to stick/stack on the top of the screen once the window scrolls to/past it. There are lots of configuration options for customizing this behavior to allow the header to always stick to the top of the screen, to only be sticky within certain boundaries, and so on.

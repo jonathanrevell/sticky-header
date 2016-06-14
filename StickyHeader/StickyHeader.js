@@ -252,6 +252,11 @@
       this.watchScroll();
       this.watchResize();
 
+      // We have to make sure we unload before
+      window.addEventListener('popstate', function() {
+        _stack.remove();
+      });
+
       if(screenGeometry){
         this.mobileState = screenGeometry.getState();
       }
@@ -559,7 +564,6 @@
 
         // re-init
         this.setupDOM();
-        this.createMutationObserver();
         this.syncToBaseHeader();
         this.createMutationObserver();
       }

@@ -1,0 +1,31 @@
+{
+  "name": "sticky-header",
+  "version": "2.0.0",
+  "description": "Enables elements to stick to the top of the viewport as the user scrolls, with stacking",
+  "main": "index.js",
+  "jspm": {
+    "name": "sticky-header",
+    "main": "sticky-header.js",
+    "devDependencies": {
+      "plugin-babel": "npm:systemjs-plugin-babel@^0.0.12"
+    }
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jonathanrevell/sticky-header.git"
+  },
+  "author": "Jonathan Revell H.",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jonathanrevell/sticky-header/issues"
+  },
+  "homepage": "https://github.com/jonathanrevell/sticky-header#readme",
+  "devDependencies": {
+    "grunt": "^1.0.1",
+    "grunt-contrib-copy": "^1.0.0",
+    "grunt-shell": "^1.3.0"
+  }
+}
